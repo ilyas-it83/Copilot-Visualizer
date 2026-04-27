@@ -1,0 +1,37 @@
+{
+  "registry_version": "1.0",
+  "entries": [
+    {
+      "persistent_name": "Michael",
+      "role": "Lead",
+      "universe": "The Office",
+      "created_at": "2026-04-27T16:31:34Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    {
+      "persistent_name": "Dwight",
+      "role": "Core Dev",
+      "universe": "The Office",
+      "created_at": "2026-04-27T16:31:34Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    {
+      "persistent_name": "Jim",
+      "role": "Frontend Dev",
+      "universe": "The Office",
+      "created_at": "2026-04-27T16:31:34Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    {
+      "persistent_name": "Pam",
+      "role": "Tester",
+      "universe": "The Office",
+      "created_at": "2026-04-27T16:31:34Z",
+      "legacy_named": false,
+      "status": "active"
+    }
+  ]
+}
