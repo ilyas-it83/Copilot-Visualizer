@@ -1,4 +1,4 @@
-// Webview-local type definitions (cannot import from extension host)
+// Webview-local type definitions for real-time monitoring
 
 export type EventType =
   | 'tool_call'
@@ -32,6 +32,15 @@ export type OfficeLocation =
   | 'coffee_machine'
   | 'door';
 
+export interface InteractionLine {
+  fromAgent: string;
+  toAgent: string;
+  progress: number;
+  duration: number;
+  elapsed: number;
+  color: string;
+}
+
 export interface CopilotEvent {
   id: string;
   type: EventType;
@@ -43,12 +52,17 @@ export interface CopilotEvent {
   metadata?: Record<string, unknown>;
 }
 
-export interface SessionInfo {
+export interface AgentInfo {
   id: string;
   name: string;
   source: LogSource;
-  date: string;
+  color: string;
+}
+
+export interface StatusUpdate {
+  agentCount: number;
   eventCount: number;
+  monitoring: boolean;
 }
 
 export interface Point {
@@ -63,18 +77,18 @@ export interface Rect {
   height: number;
 }
 
-// Messages from extension host → webview
+// Messages from extension host → webview (real-time protocol)
 export type InboundMessage =
-  | { type: 'load-session'; session: SessionInfo; events: CopilotEvent[] }
-  | { type: 'events-chunk'; events: CopilotEvent[] }
-  | { type: 'playback-control'; action: 'play' | 'pause' | 'speed'; value?: number }
-  | { type: 'session-list'; sessions: SessionInfo[] };
+  | { type: 'live-event'; event: CopilotEvent }
+  | { type: 'agent-appeared'; agent: AgentInfo }
+  | { type: 'status-update'; stats: StatusUpdate }
+  | { type: 'event-details'; event: CopilotEvent };
 
 // Messages from webview → extension host
 export type OutboundMessage =
-  | { type: 'request-session-list' }
+  | { type: 'webview-ready' }
   | { type: 'request-event-details'; eventId: string }
-  | { type: 'session-selected'; sessionId: string };
+  | { type: 'monitoring-control'; action: 'start' | 'stop' };
 
 // VS Code API available in webview context
 export interface VsCodeApi {

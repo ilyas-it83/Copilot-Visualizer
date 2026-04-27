@@ -1,33 +1,40 @@
 /**
  * Message types for extension ↔ webview communication.
+ * Real-time monitoring protocol — events stream live as Copilot works.
  */
 
 import { CopilotEvent } from './events';
-import { CopilotSession } from './session';
+
+// === Agent Identity ===
+
+export interface AgentInfo {
+  id: string;
+  name: string;
+  source: string;
+  color: string;
+}
+
+export interface MonitoringStats {
+  agentCount: number;
+  eventCount: number;
+  monitoring: boolean;
+}
 
 // === Extension → Webview Messages ===
 
-export interface LoadSessionMessage {
-  type: 'load-session';
-  session: CopilotSession;
+export interface LiveEventMessage {
+  type: 'live-event';
+  event: CopilotEvent;
 }
 
-export interface EventsChunkMessage {
-  type: 'events-chunk';
-  events: CopilotEvent[];
-  chunkIndex: number;
-  totalChunks: number;
+export interface AgentAppearedMessage {
+  type: 'agent-appeared';
+  agent: AgentInfo;
 }
 
-export interface PlaybackControlMessage {
-  type: 'playback-control';
-  action: 'play' | 'pause' | 'seek' | 'speed';
-  value?: number; // timestamp for seek, multiplier for speed
-}
-
-export interface SessionListMessage {
-  type: 'session-list';
-  sessions: CopilotSession[];
+export interface StatusUpdateMessage {
+  type: 'status-update';
+  stats: MonitoringStats;
 }
 
 export interface EventDetailsMessage {
@@ -36,36 +43,28 @@ export interface EventDetailsMessage {
 }
 
 export type ExtensionToWebviewMessage =
-  | LoadSessionMessage
-  | EventsChunkMessage
-  | PlaybackControlMessage
-  | SessionListMessage
+  | LiveEventMessage
+  | AgentAppearedMessage
+  | StatusUpdateMessage
   | EventDetailsMessage;
 
 // === Webview → Extension Messages ===
-
-export interface RequestSessionListMessage {
-  type: 'request-session-list';
-}
 
 export interface RequestEventDetailsMessage {
   type: 'request-event-details';
   eventId: string;
 }
 
-export interface SessionSelectedMessage {
-  type: 'session-selected';
-  sessionId: string;
+export interface MonitoringControlMessage {
+  type: 'monitoring-control';
+  action: 'start' | 'stop';
 }
 
-export interface PlaybackStateMessage {
-  type: 'playback-state';
-  action: 'play' | 'pause' | 'seek' | 'speed';
-  value?: number;
+export interface WebviewReadyMessage {
+  type: 'webview-ready';
 }
 
 export type WebviewToExtensionMessage =
-  | RequestSessionListMessage
   | RequestEventDetailsMessage
-  | SessionSelectedMessage
-  | PlaybackStateMessage;
+  | MonitoringControlMessage
+  | WebviewReadyMessage;

@@ -10,6 +10,9 @@
 
 <!-- Append new learnings below. Each entry is something lasting about the project. -->
 
+- **2026-04-27 (v2):** Rewrote the extension to real-time monitoring mode. Removed session-based flow (selectSession, sessionList, sendEventsInChunks). New architecture: FileWatcher (fs.watch + byte-offset tracking) → EventEmitter → OfficeViewProvider → MessageBridge → webview. Messages are now `live-event`, `agent-appeared`, `status-update`. FileWatcher starts on activation, buffers events if webview not open yet, flushes on `webview-ready`. Bundle still 29.6KB, builds in 11ms. The OfficeViewProvider no longer depends on LogDiscoveryService — the FileWatcher handles path detection internally.
+- Agent identity extraction: checks `agent_id`, `agentId`, `agent_name`, `agent` fields in event JSON. Falls back to `cli-{sessionId}`. Known Squad names (Dwight, Jim, Pam, etc.) get capitalized friendly names. Colors assigned deterministically via hash.
+
 - **2026-04-27:** Scaffolded the full VS Code extension backend. Structure: `src/extension.ts` (entry), `src/types/` (5 files), `src/services/` (3 files), `src/parsers/` (5 files), `src/providers/` (1 file). Build uses esbuild (35KB bundle, 3ms). TypeScript strict mode passes with zero errors.
 - CLI logs on this machine use `events.jsonl` (JSONL format) — one JSON object per line with `type` field like `session.start`, `hook.start`, `hook.end`. The CliParser handles both JSONL and conversation.json formats.
 - Used a simple counter+timestamp ID generator instead of adding a uuid dependency — keeps the bundle lean and avoids native module issues in VS Code extension host.

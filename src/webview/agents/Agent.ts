@@ -4,6 +4,26 @@ import { SpeechBubble } from './SpeechBubble';
 
 const WALK_SPEED = 120; // pixels per second
 
+// Distinct color palettes per agent index (beyond source color)
+const AGENT_COLORS: string[] = [
+  '#4285f4', '#34a853', '#f4a026', '#ea4335',
+  '#9c27b0', '#00bcd4', '#ff5722', '#607d8b',
+];
+
+// Role badge mapping
+const SOURCE_BADGES: Record<LogSource, string> = {
+  cli: '🔧',
+  chat: '💬',
+  inline: '⌨️',
+};
+
+// Friendly names based on source
+const SOURCE_NAMES: Record<LogSource, string> = {
+  cli: 'CLI Agent',
+  chat: 'Chat Agent',
+  inline: 'Inline Agent',
+};
+
 export class Agent {
   public id: string;
   public source: LogSource;
@@ -12,6 +32,7 @@ export class Agent {
   public deskIndex: number;
   public speechBubble: SpeechBubble | null = null;
   public currentLocation: string; // waypoint id
+  public visible = true;
 
   private path: Point[] = [];
   private pathIndex = 0;
@@ -25,29 +46,69 @@ export class Agent {
   private typingTimer = 0;
   private thinkingDots = 0;
   private thinkingTimer = 0;
+  // Idle animation state
+  private idleTimer = 0;
+  private idleBob = 0;
+  private idleLookDirection = 0; // -1 left, 0 center, 1 right
+  private idleLookTimer = 0;
+  // Monitor code lines animation
+  private codeLineCount = 0;
+  private codeLineTimer = 0;
+  // Search sweep animation
+  private searchSweepAngle = 0;
 
-  constructor(id: string, source: LogSource, startPos: Point, deskIndex: number) {
+  constructor(id: string, source: LogSource, startPos: Point, deskIndex: number, customName?: string) {
     this.id = id;
     this.source = source;
     this.position = { ...startPos };
     this.deskIndex = deskIndex;
     this.currentLocation = `desk-${deskIndex + 1}`;
+    if (customName) {
+      this._customName = customName;
+    }
   }
 
+  private _customName?: string;
+
   get color(): string {
-    switch (this.source) {
-      case 'cli': return '#4285f4'; // Blue
-      case 'chat': return '#34a853'; // Green
-      case 'inline': return '#f4a026'; // Orange
-    }
+    // Use distinct color per desk index for visual variety
+    return AGENT_COLORS[this.deskIndex % AGENT_COLORS.length];
+  }
+
+  get secondaryColor(): string {
+    // Slightly darker variant for body details
+    const base = this.color;
+    return base + 'cc';
+  }
+
+  get roleBadge(): string {
+    return SOURCE_BADGES[this.source];
   }
 
   get displayName(): string {
-    // Shorten agent ID for display
-    if (this.id.length > 12) {
-      return this.id.substring(0, 10) + '…';
+    // Use custom name if provided by extension host
+    if (this._customName) return this._customName;
+
+    const id = this.id;
+
+    // If ID contains recognizable names, use them
+    if (id.includes('squad') || id.includes('Squad')) {
+      const parts = id.split(/[-_./]/);
+      const name = parts.find(p => p.length > 2 && !p.match(/^[a-f0-9]+$/i));
+      if (name) return name.charAt(0).toUpperCase() + name.slice(1);
     }
-    return this.id;
+
+    // Source-based default name + index for disambiguation
+    const baseName = SOURCE_NAMES[this.source];
+    if (this.deskIndex > 0) {
+      return `${baseName} ${this.deskIndex + 1}`;
+    }
+    return baseName;
+  }
+
+  get shortName(): string {
+    const name = this.displayName;
+    return name.length > 14 ? name.substring(0, 12) + '…' : name;
   }
 
   moveTo(location: OfficeLocation, locationIndex: number = 0, onArrival?: () => void): void {
@@ -107,6 +168,38 @@ export class Agent {
       this.thinkingTimer = 0;
     }
 
+    // Idle animation: subtle bob and look-around
+    if (this.status === 'idle') {
+      this.idleTimer += dt;
+      this.idleBob = Math.sin(this.idleTimer * 1.5) * 0.8;
+      this.idleLookTimer += dt;
+      if (this.idleLookTimer > 3 + Math.random() * 2) {
+        this.idleLookDirection = Math.floor(Math.random() * 3) - 1;
+        this.idleLookTimer = 0;
+      }
+    } else {
+      this.idleBob = 0;
+      this.idleLookDirection = 0;
+    }
+
+    // Code lines animation (when typing)
+    if (this.status === 'typing') {
+      this.codeLineTimer += dt;
+      if (this.codeLineTimer > 0.3) {
+        this.codeLineCount = (this.codeLineCount + 1) % 6;
+        this.codeLineTimer = 0;
+      }
+    } else {
+      this.codeLineCount = 0;
+    }
+
+    // Search sweep animation
+    if (this.status === 'searching') {
+      this.searchSweepAngle += dt * 3;
+    } else {
+      this.searchSweepAngle = 0;
+    }
+
     // Update speech bubble
     if (this.speechBubble) {
       this.speechBubble.update(dt);
@@ -155,5 +248,21 @@ export class Agent {
 
   getThinkingDots(): number {
     return this.thinkingDots;
+  }
+
+  getIdleBob(): number {
+    return this.idleBob;
+  }
+
+  getIdleLookDirection(): number {
+    return this.idleLookDirection;
+  }
+
+  getCodeLineCount(): number {
+    return this.codeLineCount;
+  }
+
+  getSearchSweepAngle(): number {
+    return this.searchSweepAngle;
   }
 }

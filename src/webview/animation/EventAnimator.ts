@@ -1,12 +1,14 @@
 import { CopilotEvent } from '../types';
 import { Agent } from '../agents/Agent';
 import { OfficeScene } from '../scene/OfficeScene';
+import { ActivityLog } from '../ui/ActivityLog';
 
 /**
  * Maps CopilotEvent types to animation sequences that play on agents.
+ * Drives activity log and interaction line visuals.
  */
 export class EventAnimator {
-  constructor(private scene: OfficeScene) {}
+  constructor(private scene: OfficeScene, private activityLog: ActivityLog) {}
 
   /**
    * Animate an event on the appropriate agent.
@@ -41,59 +43,67 @@ export class EventAnimator {
   }
 
   private animateToolCall(agent: Agent, event: CopilotEvent): number {
-    const toolName = (event.metadata?.tool as string) ?? '';
+    const toolName = (event as any).toolName || (event.metadata?.toolName as string) || (event.metadata?.tool as string) || (event.metadata?.data as any)?.toolName || '';
 
     if (toolName.includes('bash') || toolName.includes('shell')) {
-      // Walk to terminal, type
       agent.moveTo('terminal', 0, () => {
         agent.setStatus('typing');
         agent.showSpeechBubble(`$ ${this.truncate(toolName, 30)}`, 'tool', 2500);
       });
+      this.activityLog.add(`${agent.displayName} walked to terminal`, agent.color);
+      setTimeout(() => {
+        const cmd = (event.metadata?.command as string) || (event.metadata?.data as any)?.arguments?.command || toolName;
+        this.activityLog.add(`${agent.displayName}: $ ${this.truncate(cmd, 40)}`, agent.color);
+      }, 1000);
       return 3000;
     }
 
     if (toolName.includes('read') || toolName.includes('view') || toolName.includes('cat')) {
-      // Walk to file cabinet, read
       agent.moveTo('file_cabinet', 0, () => {
         agent.setStatus('reading');
-        const fileName = (event.metadata?.path as string) ?? 'file';
-        agent.showSpeechBubble(`📄 ${this.truncate(fileName, 25)}`, 'tool', 2000);
+        const filePath = (event.metadata?.path as string) || (event.metadata?.data as any)?.arguments?.path || 'file';
+        agent.showSpeechBubble(`📄 ${this.truncate(filePath, 25)}`, 'tool', 2000);
       });
+      this.activityLog.add(
+        `${agent.displayName} reading ${this.truncate((event.metadata?.path as string) || (event.metadata?.data as any)?.arguments?.path || 'file', 30)}`,
+        agent.color
+      );
       return 2500;
     }
 
     if (toolName.includes('edit') || toolName.includes('create') || toolName.includes('write')) {
-      // Go to desk, type rapidly
       agent.moveTo('desk', agent.deskIndex, () => {
         agent.setStatus('typing');
         agent.showSpeechBubble(`✏️ editing...`, 'tool', 2000);
       });
+      this.activityLog.add(`${agent.displayName} editing code`, agent.color);
       return 2500;
     }
 
     if (toolName.includes('grep') || toolName.includes('glob') || toolName.includes('search') || toolName.includes('find')) {
-      // Walk to search station
       agent.moveTo('search_station', 0, () => {
         agent.setStatus('searching');
         agent.showSpeechBubble(`🔍 ${this.truncate(toolName, 25)}`, 'tool', 2000);
       });
+      this.activityLog.add(`${agent.displayName} searching: ${this.truncate(toolName, 30)}`, agent.color);
       return 2500;
     }
 
-    // Default: stay at desk and show tool bubble
+    // Default: stay at desk
     agent.moveTo('desk', agent.deskIndex, () => {
       agent.setStatus('typing');
       agent.showSpeechBubble(`🔧 ${this.truncate(toolName, 30)}`, 'tool', 2000);
     });
+    this.activityLog.add(`${agent.displayName} using tool: ${this.truncate(toolName, 25)}`, agent.color);
     return 2000;
   }
 
   private animateToolResult(agent: Agent, _event: CopilotEvent): number {
-    // Agent finishes and returns to idle
     setTimeout(() => {
       agent.setStatus('idle');
       agent.moveTo('desk', agent.deskIndex);
     }, 500);
+    this.activityLog.add(`${agent.displayName} returned to desk`, agent.color);
     return 1000;
   }
 
@@ -102,14 +112,14 @@ export class EventAnimator {
     const isUser = (event.metadata?.role as string) === 'user';
 
     if (isUser) {
-      // User message: bubble appears from the side
       agent.showSpeechBubble(content, 'speech', 3000);
       agent.setStatus('idle');
+      this.activityLog.add(`User → ${agent.displayName}: "${this.truncate(content, 35)}"`, '#aaa');
     } else {
-      // Assistant message: agent talks
       agent.setStatus('talking');
       agent.showSpeechBubble(content, 'speech', 3500);
       setTimeout(() => agent.setStatus('idle'), 3000);
+      this.activityLog.add(`${agent.displayName}: "${this.truncate(content, 35)}"`, agent.color);
     }
     return 3000;
   }
@@ -120,12 +130,14 @@ export class EventAnimator {
       agent.showSpeechBubble('✓ complete', 'tool', 1500);
       setTimeout(() => agent.setStatus('idle'), 1500);
     });
+    this.activityLog.add(`${agent.displayName} completed task`, agent.color);
     return 2000;
   }
 
   private animateThinking(agent: Agent, _event: CopilotEvent): number {
     agent.setStatus('thinking');
     agent.showSpeechBubble('...', 'thought', 2000);
+    this.activityLog.add(`${agent.displayName} is thinking...`, agent.color);
     return 2000;
   }
 
@@ -133,20 +145,28 @@ export class EventAnimator {
     const targetId = (event.metadata?.targetAgent as string) ?? '';
     const targetAgent = this.scene.getAgent(targetId);
 
-    // Both agents walk to meeting table
     agent.moveTo('meeting_table', 0, () => {
       agent.setStatus('talking');
-      agent.showSpeechBubble(`→ ${this.truncate(targetId, 15)}`, 'speech', 2000);
+      const content = (event.metadata?.content as string) ?? `→ ${this.truncate(targetId, 15)}`;
+      agent.showSpeechBubble(this.truncate(content, 40), 'speech', 2500);
     });
 
     if (targetAgent) {
       targetAgent.moveTo('meeting_table', 0, () => {
         targetAgent.setStatus('talking');
+        targetAgent.showSpeechBubble('👂 Listening...', 'speech', 2000);
       });
+
+      this.scene.addInteractionLine(agent.id, targetId, agent.color, 2.5);
+
       setTimeout(() => {
         targetAgent.setStatus('idle');
         targetAgent.moveTo('desk', targetAgent.deskIndex);
       }, 2500);
+
+      this.activityLog.add(`${agent.displayName} → ${targetAgent.displayName}: handoff`, agent.color);
+    } else {
+      this.activityLog.add(`${agent.displayName} handing off to ${this.truncate(targetId, 15)}`, agent.color);
     }
 
     setTimeout(() => {
@@ -158,13 +178,13 @@ export class EventAnimator {
   }
 
   private animateSessionStart(agent: Agent, _event: CopilotEvent): number {
-    // Agent enters through the door
     agent.position = { x: 400, y: 470 };
     agent.currentLocation = 'door';
     agent.showSpeechBubble('👋 Hello!', 'speech', 2000);
     agent.moveTo('desk', agent.deskIndex, () => {
       agent.setStatus('idle');
     });
+    this.activityLog.add(`${agent.displayName} joined the session`, agent.color);
     return 2500;
   }
 
@@ -173,6 +193,7 @@ export class EventAnimator {
     agent.moveTo('door', 0, () => {
       agent.setStatus('idle');
     });
+    this.activityLog.add(`${agent.displayName} left the office`, agent.color);
     return 2000;
   }
 
@@ -180,6 +201,7 @@ export class EventAnimator {
     const msg = (event.metadata?.message as string) ?? 'Error';
     agent.showSpeechBubble(`❌ ${this.truncate(msg, 30)}`, 'speech', 3000);
     agent.setStatus('idle');
+    this.activityLog.add(`${agent.displayName}: ❌ ${this.truncate(msg, 30)}`, '#ea4335');
     return 2000;
   }
 

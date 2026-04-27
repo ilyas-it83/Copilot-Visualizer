@@ -1,32 +1,32 @@
 /**
  * Copilot Visualizer — Extension Entry Point
- * Registers commands, initializes services, and sets up the webview provider.
+ * Real-time monitoring mode: starts watching Copilot logs immediately on activation.
  */
 
 import * as vscode from 'vscode';
-import { LogDiscoveryService } from './services/logDiscovery';
 import { EventStore } from './services/eventStore';
 import { MessageBridge } from './services/messageBridge';
+import { FileWatcher } from './services/fileWatcher';
 import { OfficeViewProvider } from './providers/officeViewProvider';
-import { parseSession } from './parsers';
 
 let officeViewProvider: OfficeViewProvider;
+let fileWatcher: FileWatcher;
 let statusBarItem: vscode.StatusBarItem;
 
 export function activate(context: vscode.ExtensionContext): void {
-  console.log('[Copilot Visualizer] Activating...');
+  console.log('[Copilot Visualizer] Activating (real-time mode)...');
 
   // Initialize services
-  const logDiscovery = new LogDiscoveryService();
   const eventStore = new EventStore();
   const messageBridge = new MessageBridge();
+  fileWatcher = new FileWatcher();
 
   // Create webview provider
   officeViewProvider = new OfficeViewProvider(
     context.extensionUri,
     messageBridge,
     eventStore,
-    logDiscovery,
+    fileWatcher,
   );
 
   // Register commands
@@ -37,92 +37,66 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   );
 
-  const selectSessionCmd = vscode.commands.registerCommand(
-    'copilot-visualizer.selectSession',
-    async () => {
-      const sessions = await logDiscovery.discoverSessions();
-
-      if (sessions.length === 0) {
-        vscode.window.showInformationMessage('No Copilot sessions found.');
-        return;
+  const toggleMonitoringCmd = vscode.commands.registerCommand(
+    'copilot-visualizer.toggleMonitoring',
+    () => {
+      if (fileWatcher.isRunning) {
+        officeViewProvider.stopMonitoring();
+        updateStatusBar(false, eventStore.count);
+        vscode.window.showInformationMessage('Copilot monitoring paused.');
+      } else {
+        officeViewProvider.startMonitoring();
+        updateStatusBar(true, eventStore.count);
+        vscode.window.showInformationMessage('Copilot monitoring resumed.');
       }
-
-      const items = sessions.map(s => ({
-        label: s.name,
-        description: `${s.source} — ${s.logPath}`,
-        detail: s.eventCount > 0 ? `${s.eventCount} events` : undefined,
-        sessionId: s.id,
-      }));
-
-      const selected = await vscode.window.showQuickPick(items, {
-        placeHolder: 'Select a Copilot session to visualize',
-      });
-
-      if (selected) {
-        const session = sessions.find(s => s.id === selected.sessionId);
-        if (session) {
-          // Parse and load
-          const events = await parseSession(session);
-          eventStore.loadEvents(events);
-          session.eventCount = events.length;
-
-          // Open panel and send data
-          officeViewProvider.openPanel();
-          messageBridge.sendSession(session);
-          await messageBridge.sendEventsInChunks(events);
-
-          updateStatusBar(session.name, events.length);
-        }
-      }
-    }
-  );
-
-  const refreshLogsCmd = vscode.commands.registerCommand(
-    'copilot-visualizer.refreshLogs',
-    async () => {
-      const sessions = await logDiscovery.discoverSessions();
-      vscode.window.showInformationMessage(
-        `Found ${sessions.length} Copilot session(s).`
-      );
-      messageBridge.sendSessionList(sessions);
     }
   );
 
   // Status bar item
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   statusBarItem.command = 'copilot-visualizer.openOffice';
-  statusBarItem.text = '$(play) Copilot Office';
-  statusBarItem.tooltip = 'Open Copilot Visualizer';
+  statusBarItem.text = '$(eye) Copilot Live';
+  statusBarItem.tooltip = 'Open Copilot Visualizer (real-time monitoring)';
   statusBarItem.show();
 
   // Register disposables
   context.subscriptions.push(
     openOfficeCmd,
-    selectSessionCmd,
-    refreshLogsCmd,
+    toggleMonitoringCmd,
     statusBarItem,
     { dispose: () => messageBridge.dispose() },
     { dispose: () => officeViewProvider.dispose() },
+    { dispose: () => fileWatcher.dispose() },
   );
 
-  // Kick off initial discovery in background
-  logDiscovery.discoverSessions().then(sessions => {
-    if (sessions.length > 0) {
-      updateStatusBar(undefined, undefined, sessions.length);
-    }
-  });
+  // Start monitoring immediately on activation
+  officeViewProvider.startMonitoring();
 
-  console.log('[Copilot Visualizer] Activated successfully.');
+  // Update status bar with live event count periodically
+  const statusUpdateInterval = setInterval(() => {
+    if (fileWatcher.isRunning) {
+      updateStatusBar(true, eventStore.count);
+    }
+  }, 3000);
+  context.subscriptions.push({ dispose: () => clearInterval(statusUpdateInterval) });
+
+  console.log('[Copilot Visualizer] Activated — real-time monitoring started.');
 }
 
 export function deactivate(): void {
+  if (fileWatcher) {
+    fileWatcher.dispose();
+  }
   console.log('[Copilot Visualizer] Deactivated.');
 }
 
-function updateStatusBar(sessionName?: string, eventCount?: number, totalSessions?: number): void {
-  if (sessionName && eventCount !== undefined) {
-    statusBarItem.text = `$(play) ${sessionName} (${eventCount} events)`;
-  } else if (totalSessions !== undefined) {
-    statusBarItem.text = `$(play) Copilot Office (${totalSessions} sessions)`;
+function updateStatusBar(monitoring: boolean, eventCount: number): void {
+  if (monitoring) {
+    const countStr = eventCount > 0 ? ` (${eventCount})` : '';
+    statusBarItem.text = `$(eye) Copilot Live${countStr}`;
+    statusBarItem.tooltip = `Monitoring Copilot — ${eventCount} events captured`;
+  } else {
+    statusBarItem.text = '$(eye-closed) Copilot Paused';
+    statusBarItem.tooltip = 'Copilot monitoring paused — click to open';
   }
 }

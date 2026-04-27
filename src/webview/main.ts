@@ -1,50 +1,43 @@
 import { OfficeScene } from './scene/OfficeScene';
-import { AnimationController } from './animation/AnimationController';
 import { MessageHandler } from './MessageHandler';
-import { Timeline } from './ui/Timeline';
-import { EventInspector } from './ui/EventInspector';
-import { SessionPicker } from './ui/SessionPicker';
+import { LiveEventQueue } from './ui/LiveEventQueue';
+import { ActivityLog } from './ui/ActivityLog';
+import { StatusBar } from './ui/StatusBar';
 import { VsCodeApi } from './types';
 
 class App {
   private vscode: VsCodeApi;
   private scene: OfficeScene;
-  private animationController: AnimationController;
   private messageHandler: MessageHandler;
-  private timeline: Timeline;
-  private eventInspector: EventInspector;
-  private sessionPicker: SessionPicker;
+  private liveEventQueue: LiveEventQueue;
+  private activityLog: ActivityLog;
+  private statusBar: StatusBar;
 
   constructor() {
     this.vscode = acquireVsCodeApi();
 
     const canvas = document.getElementById('office-canvas') as HTMLCanvasElement;
-    const timelineEl = document.getElementById('timeline-bar')!;
-    const inspectorEl = document.getElementById('event-inspector')!;
-    const pickerEl = document.getElementById('session-picker')!;
+    const logEl = document.getElementById('activity-log')!;
+    const statusEl = document.getElementById('status-bar')!;
 
     this.scene = new OfficeScene(canvas);
-    this.animationController = new AnimationController(this.scene);
-    this.timeline = new Timeline(timelineEl, this.animationController);
-    this.eventInspector = new EventInspector(inspectorEl);
-    this.sessionPicker = new SessionPicker(pickerEl, (sessionId) => {
-      this.vscode.postMessage({ type: 'session-selected', sessionId });
-    });
+    this.activityLog = new ActivityLog(logEl);
+    this.statusBar = new StatusBar(statusEl);
+    this.liveEventQueue = new LiveEventQueue(this.scene, this.activityLog);
 
     this.messageHandler = new MessageHandler(
       this.vscode,
       this.scene,
-      this.animationController,
-      this.timeline,
-      this.eventInspector,
-      this.sessionPicker
+      this.liveEventQueue,
+      this.activityLog,
+      this.statusBar
     );
 
     this.resizeCanvas();
     window.addEventListener('resize', () => this.resizeCanvas());
 
-    // Request sessions on startup
-    this.vscode.postMessage({ type: 'request-session-list' });
+    // Signal webview is ready
+    this.vscode.postMessage({ type: 'webview-ready' });
 
     // Start render loop
     this.scene.start();
