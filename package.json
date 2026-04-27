@@ -5,6 +5,15 @@
   "version": "0.1.0",
   "publisher": "copilot-visualizer",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ilyas-it83/Copilot-Visualizer.git"
+  },
+  "homepage": "https://github.com/ilyas-it83/Copilot-Visualizer#readme",
+  "bugs": {
+    "url": "https://github.com/ilyas-it83/Copilot-Visualizer/issues"
+  },
+  "icon": "src/img/Copilot-visualizer.png",
   "engines": {
     "vscode": "^1.85.0"
   },

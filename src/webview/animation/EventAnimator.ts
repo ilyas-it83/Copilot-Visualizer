@@ -103,7 +103,6 @@ export class EventAnimator {
       agent.setStatus('idle');
       agent.moveTo('desk', agent.deskIndex);
     }, 500);
-    this.activityLog.add(`${agent.displayName} returned to desk`, agent.color);
     return 1000;
   }
 
@@ -127,7 +126,6 @@ export class EventAnimator {
   private animateCompletion(agent: Agent, _event: CopilotEvent): number {
     agent.moveTo('desk', agent.deskIndex, () => {
       agent.setStatus('typing');
-      agent.showSpeechBubble('✓ complete', 'tool', 1500);
       setTimeout(() => agent.setStatus('idle'), 1500);
     });
     this.activityLog.add(`${agent.displayName} completed task`, agent.color);
@@ -178,18 +176,12 @@ export class EventAnimator {
   }
 
   private animateSessionStart(agent: Agent, _event: CopilotEvent): number {
-    agent.position = { x: 400, y: 470 };
-    agent.currentLocation = 'door';
-    agent.showSpeechBubble('👋 Hello!', 'speech', 2000);
-    agent.moveTo('desk', agent.deskIndex, () => {
-      agent.setStatus('idle');
-    });
+    agent.setStatus('idle');
     this.activityLog.add(`${agent.displayName} joined the session`, agent.color);
-    return 2500;
+    return 1000;
   }
 
   private animateSessionEnd(agent: Agent, _event: CopilotEvent): number {
-    agent.showSpeechBubble('👋 Done!', 'speech', 1500);
     agent.moveTo('door', 0, () => {
       agent.setStatus('idle');
     });

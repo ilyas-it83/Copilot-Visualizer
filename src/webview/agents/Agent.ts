@@ -24,6 +24,18 @@ const SOURCE_NAMES: Record<LogSource, string> = {
   inline: 'Inline Agent',
 };
 
+// Idle roaming destinations with their activity status and duration ranges
+const IDLE_ACTIVITIES: Array<{ location: OfficeLocation; status: AgentStatus; minDuration: number; maxDuration: number; bubble?: string }> = [
+  { location: 'coffee_machine', status: 'drinking_coffee', minDuration: 4, maxDuration: 6, bubble: '☕ Coffee break...' },
+  { location: 'water_cooler', status: 'drinking_water', minDuration: 3, maxDuration: 5, bubble: '💧 Staying hydrated' },
+  { location: 'washroom', status: 'in_washroom', minDuration: 5, maxDuration: 8 },
+  { location: 'meeting_table', status: 'in_meeting', minDuration: 6, maxDuration: 12, bubble: '🗣️ Quick sync...' },
+  { location: 'whiteboard', status: 'at_whiteboard', minDuration: 5, maxDuration: 10, bubble: '📝 Sketching ideas...' },
+  { location: 'file_cabinet', status: 'browsing_files', minDuration: 4, maxDuration: 7, bubble: '📂 Looking up docs...' },
+  { location: 'desk', status: 'watching_phone', minDuration: 5, maxDuration: 12, bubble: '📱 Scrolling...' },
+  { location: 'desk', status: 'sleeping', minDuration: 8, maxDuration: 15, bubble: '💤 Zzzzz...' },
+];
+
 export class Agent {
   public id: string;
   public source: LogSource;
@@ -38,6 +50,13 @@ export class Agent {
   private pathIndex = 0;
   private targetPosition: Point | null = null;
   private onArrival: (() => void) | null = null;
+
+  // Idle roaming state
+  private idleRoamTimer = 0;
+  private idleRoamDelay: number; // random 8-15s per agent
+  private isRoaming = false;
+  private roamActivityTimer = 0;
+  private roamActivityDuration = 0;
 
   // Animation state
   private walkFrame = 0;
@@ -63,6 +82,7 @@ export class Agent {
     this.position = { ...startPos };
     this.deskIndex = deskIndex;
     this.currentLocation = `desk-${deskIndex + 1}`;
+    this.idleRoamDelay = 8 + Math.random() * 7; // 8-15 seconds
     if (customName) {
       this._customName = customName;
     }
@@ -71,12 +91,10 @@ export class Agent {
   private _customName?: string;
 
   get color(): string {
-    // Use distinct color per desk index for visual variety
     return AGENT_COLORS[this.deskIndex % AGENT_COLORS.length];
   }
 
   get secondaryColor(): string {
-    // Slightly darker variant for body details
     const base = this.color;
     return base + 'cc';
   }
@@ -86,19 +104,16 @@ export class Agent {
   }
 
   get displayName(): string {
-    // Use custom name if provided by extension host
     if (this._customName) return this._customName;
 
     const id = this.id;
 
-    // If ID contains recognizable names, use them
     if (id.includes('squad') || id.includes('Squad')) {
       const parts = id.split(/[-_./]/);
       const name = parts.find(p => p.length > 2 && !p.match(/^[a-f0-9]+$/i));
       if (name) return name.charAt(0).toUpperCase() + name.slice(1);
     }
 
-    // Source-based default name + index for disambiguation
     const baseName = SOURCE_NAMES[this.source];
     if (this.deskIndex > 0) {
       return `${baseName} ${this.deskIndex + 1}`;
@@ -111,7 +126,12 @@ export class Agent {
     return name.length > 14 ? name.substring(0, 12) + '…' : name;
   }
 
-  moveTo(location: OfficeLocation, locationIndex: number = 0, onArrival?: () => void): void {
+  moveTo(location: OfficeLocation, locationIndex: number = 0, onArrival?: () => void, isIdleRoam?: boolean): void {
+    // Real Copilot events interrupt idle roaming
+    if (!isIdleRoam) {
+      this.interruptIdleRoam();
+    }
+
     const targetWaypoint = locationToWaypoint(location, locationIndex);
     const pathPoints = findPath(this.currentLocation, targetWaypoint);
 
@@ -129,6 +149,28 @@ export class Agent {
       this.currentLocation = targetWaypoint;
       onArrival?.();
     };
+  }
+
+  /** Interrupt any idle roaming — called when real Copilot events arrive */
+  interruptIdleRoam(): void {
+    if (this.isRoaming) {
+      this.isRoaming = false;
+      this.roamActivityTimer = 0;
+      this.roamActivityDuration = 0;
+      // If walking to idle destination, clear path and snap back
+      if (this.status === 'walking' || this.status === 'drinking_coffee' ||
+          this.status === 'drinking_water' || this.status === 'in_washroom' ||
+          this.status === 'in_meeting' || this.status === 'at_whiteboard' ||
+          this.status === 'browsing_files' ||
+          this.status === 'watching_phone' || this.status === 'sleeping') {
+        this.path = [];
+        this.pathIndex = 0;
+        this.targetPosition = null;
+        this.onArrival = null;
+        this.status = 'idle';
+      }
+    }
+    this.idleRoamTimer = 0;
   }
 
   setStatus(status: AgentStatus): void {
@@ -149,6 +191,9 @@ export class Agent {
       this.updateMovement(dt);
     }
 
+    // Idle roaming logic
+    this.updateIdleRoaming(dt);
+
     // Update animation counters
     this.walkTimer += dt;
     if (this.walkTimer > 0.2) {
@@ -168,19 +213,14 @@ export class Agent {
       this.thinkingTimer = 0;
     }
 
-    // Idle animation: subtle bob and look-around
-    if (this.status === 'idle') {
+    // Subtle idle bob
+    if (this.status === 'idle' && !this.isRoaming) {
       this.idleTimer += dt;
-      this.idleBob = Math.sin(this.idleTimer * 1.5) * 0.8;
-      this.idleLookTimer += dt;
-      if (this.idleLookTimer > 3 + Math.random() * 2) {
-        this.idleLookDirection = Math.floor(Math.random() * 3) - 1;
-        this.idleLookTimer = 0;
-      }
+      this.idleBob = Math.sin(this.idleTimer * 1.5) * 0.5;
     } else {
       this.idleBob = 0;
-      this.idleLookDirection = 0;
     }
+    this.idleLookDirection = 0;
 
     // Code lines animation (when typing)
     if (this.status === 'typing') {
@@ -207,6 +247,64 @@ export class Agent {
         this.speechBubble = null;
       }
     }
+  }
+
+  private updateIdleRoaming(dt: number): void {
+    // Only start roaming when truly idle (not in the middle of a real task)
+    if (this.status === 'idle' && !this.isRoaming) {
+      this.idleRoamTimer += dt;
+      if (this.idleRoamTimer >= this.idleRoamDelay) {
+        this.idleRoamTimer = 0;
+        this.triggerIdleActivity();
+      }
+    }
+
+    // Track time spent at idle activity location
+    if (this.isRoaming && this.status !== 'walking' && this.status !== 'idle') {
+      this.roamActivityTimer += dt;
+      if (this.roamActivityTimer >= this.roamActivityDuration) {
+        // Activity done, walk back to desk
+        this.roamActivityTimer = 0;
+        this.roamActivityDuration = 0;
+        this.moveTo('desk', this.deskIndex, () => {
+          this.isRoaming = false;
+          this.status = 'idle';
+          this.idleRoamDelay = 8 + Math.random() * 7; // Re-randomize
+        }, true);
+      }
+    }
+  }
+
+  private triggerIdleActivity(): void {
+    // 20% chance to stay at desk doing nothing
+    if (Math.random() < 0.2) {
+      this.idleRoamDelay = 8 + Math.random() * 7;
+      return;
+    }
+
+    const activity = IDLE_ACTIVITIES[Math.floor(Math.random() * IDLE_ACTIVITIES.length)];
+    const duration = activity.minDuration + Math.random() * (activity.maxDuration - activity.minDuration);
+
+    this.isRoaming = true;
+    this.roamActivityDuration = duration;
+
+    // Desk-based activities: no walking needed
+    if (activity.location === 'desk') {
+      this.status = activity.status;
+      if (activity.bubble) {
+        this.showSpeechBubble(activity.bubble, 'speech', duration * 1000 * 0.6);
+      }
+      return;
+    }
+
+    const bubbleText = activity.bubble;
+    this.moveTo(activity.location, 0, () => {
+      // Arrived at activity location
+      this.status = activity.status;
+      if (bubbleText) {
+        this.showSpeechBubble(bubbleText, 'speech', duration * 1000 * 0.6);
+      }
+    }, true);
   }
 
   private updateMovement(dt: number): void {
@@ -264,5 +362,9 @@ export class Agent {
 
   getSearchSweepAngle(): number {
     return this.searchSweepAngle;
+  }
+
+  getIsRoaming(): boolean {
+    return this.isRoaming;
   }
 }

@@ -14,22 +14,39 @@ export interface Waypoint {
   connections: string[];
 }
 
-// Office dimensions: 800x500 logical units
-export const OFFICE_WIDTH = 800;
-export const OFFICE_HEIGHT = 500;
+// Office dimensions: 1000x600 logical units (expanded for better space usage)
+export const OFFICE_WIDTH = 1000;
+export const OFFICE_HEIGHT = 600;
 
 export const LOCATIONS: LocationDef[] = [
-  { id: 'desk', position: { x: 120, y: 150 }, size: { x: 100, y: 130, width: 80, height: 50 }, label: 'Desk 1' },
-  { id: 'desk', position: { x: 250, y: 150 }, size: { x: 230, y: 130, width: 80, height: 50 }, label: 'Desk 2' },
-  { id: 'desk', position: { x: 380, y: 150 }, size: { x: 360, y: 130, width: 80, height: 50 }, label: 'Desk 3' },
-  { id: 'desk', position: { x: 510, y: 150 }, size: { x: 490, y: 130, width: 80, height: 50 }, label: 'Desk 4' },
-  { id: 'terminal', position: { x: 680, y: 100 }, size: { x: 650, y: 80, width: 100, height: 70 }, label: 'Terminal' },
-  { id: 'file_cabinet', position: { x: 680, y: 250 }, size: { x: 660, y: 230, width: 80, height: 60 }, label: 'Files' },
-  { id: 'meeting_table', position: { x: 350, y: 370 }, size: { x: 300, y: 340, width: 140, height: 100 }, label: 'Meeting' },
-  { id: 'search_station', position: { x: 120, y: 370 }, size: { x: 90, y: 350, width: 90, height: 60 }, label: 'Search' },
-  { id: 'whiteboard', position: { x: 550, y: 370 }, size: { x: 530, y: 350, width: 100, height: 80 }, label: 'Whiteboard' },
-  { id: 'coffee_machine', position: { x: 50, y: 250 }, size: { x: 30, y: 230, width: 60, height: 50 }, label: 'Coffee' },
-  { id: 'door', position: { x: 400, y: 480 }, size: { x: 370, y: 460, width: 60, height: 40 }, label: 'Door' },
+  // Top zone (y: 50-200): 6 desks spread wide
+  { id: 'desk', position: { x: 80, y: 120 }, size: { x: 55, y: 95, width: 80, height: 50 }, label: 'Desk 1' },
+  { id: 'desk', position: { x: 220, y: 120 }, size: { x: 195, y: 95, width: 80, height: 50 }, label: 'Desk 2' },
+  { id: 'desk', position: { x: 360, y: 120 }, size: { x: 335, y: 95, width: 80, height: 50 }, label: 'Desk 3' },
+  { id: 'desk', position: { x: 540, y: 120 }, size: { x: 515, y: 95, width: 80, height: 50 }, label: 'Desk 4' },
+  { id: 'desk', position: { x: 680, y: 120 }, size: { x: 655, y: 95, width: 80, height: 50 }, label: 'Desk 5' },
+  { id: 'desk', position: { x: 820, y: 120 }, size: { x: 795, y: 95, width: 80, height: 50 }, label: 'Desk 6' },
+
+  // Middle-left zone (y: 220-350): Terminal, Search
+  { id: 'terminal', position: { x: 100, y: 280 }, size: { x: 65, y: 250, width: 100, height: 70 }, label: 'Terminal' },
+  { id: 'search_station', position: { x: 260, y: 280 }, size: { x: 230, y: 255, width: 90, height: 60 }, label: 'Search' },
+
+  // Middle-right zone (y: 220-350): File cabinet, Whiteboard
+  { id: 'file_cabinet', position: { x: 780, y: 270 }, size: { x: 755, y: 245, width: 80, height: 60 }, label: 'Files' },
+  { id: 'whiteboard', position: { x: 900, y: 260 }, size: { x: 880, y: 240, width: 90, height: 80 }, label: 'Whiteboard' },
+
+  // Bottom-left (y: 400-530): Coffee booth, Water cooler — inside Pantry
+  { id: 'coffee_machine', position: { x: 80, y: 470 }, size: { x: 50, y: 440, width: 70, height: 55 }, label: 'Coffee' },
+  { id: 'water_cooler', position: { x: 200, y: 470 }, size: { x: 180, y: 445, width: 50, height: 55 }, label: 'Water' },
+
+  // Bottom-center (y: 400-530): Meeting table centered in Meeting Room
+  { id: 'meeting_table', position: { x: 480, y: 470 }, size: { x: 410, y: 430, width: 180, height: 100 }, label: 'Meeting' },
+
+  // Bottom-right (y: 400-530): Washroom
+  { id: 'washroom', position: { x: 880, y: 470 }, size: { x: 855, y: 445, width: 70, height: 60 }, label: 'WC' },
+
+  // Bottom edge: Door/entrance
+  { id: 'door', position: { x: 500, y: 575 }, size: { x: 470, y: 555, width: 60, height: 40 }, label: 'Door' },
 ];
 
 // Get desk locations for assigning to agents
@@ -47,23 +64,37 @@ export function getLocationsOfType(type: OfficeLocation): LocationDef[] {
   return LOCATIONS.filter((l) => l.id === type);
 }
 
-// Simple waypoint graph for pathfinding
+// Waypoint graph for pathfinding — all locations connected via corridors
 export const WAYPOINTS: Waypoint[] = [
-  { id: 'hall-center', position: { x: 400, y: 280 }, connections: ['hall-left', 'hall-right', 'meeting', 'desks-center'] },
-  { id: 'hall-left', position: { x: 150, y: 280 }, connections: ['hall-center', 'search', 'coffee', 'desk-1', 'desk-2'] },
-  { id: 'hall-right', position: { x: 650, y: 280 }, connections: ['hall-center', 'terminal', 'files', 'whiteboard', 'desk-3', 'desk-4'] },
-  { id: 'desks-center', position: { x: 400, y: 180 }, connections: ['hall-center', 'desk-2', 'desk-3'] },
-  { id: 'desk-1', position: { x: 120, y: 190 }, connections: ['hall-left'] },
-  { id: 'desk-2', position: { x: 250, y: 190 }, connections: ['hall-left', 'desks-center'] },
-  { id: 'desk-3', position: { x: 380, y: 190 }, connections: ['desks-center', 'hall-right'] },
-  { id: 'desk-4', position: { x: 510, y: 190 }, connections: ['hall-right'] },
-  { id: 'terminal', position: { x: 680, y: 140 }, connections: ['hall-right'] },
-  { id: 'files', position: { x: 680, y: 260 }, connections: ['hall-right'] },
-  { id: 'meeting', position: { x: 370, y: 370 }, connections: ['hall-center'] },
-  { id: 'search', position: { x: 130, y: 370 }, connections: ['hall-left'] },
-  { id: 'whiteboard', position: { x: 570, y: 370 }, connections: ['hall-right'] },
-  { id: 'coffee', position: { x: 60, y: 260 }, connections: ['hall-left'] },
-  { id: 'door', position: { x: 400, y: 470 }, connections: ['hall-center'] },
+  // Main corridors
+  { id: 'corridor-top', position: { x: 500, y: 200 }, connections: ['corridor-left', 'corridor-right', 'corridor-center', 'desk-3', 'desk-4'] },
+  { id: 'corridor-left', position: { x: 180, y: 280 }, connections: ['corridor-top', 'corridor-center', 'corridor-bottom-left', 'desk-1', 'desk-2', 'terminal', 'search'] },
+  { id: 'corridor-right', position: { x: 820, y: 280 }, connections: ['corridor-top', 'corridor-center', 'corridor-bottom-right', 'desk-5', 'desk-6', 'files', 'whiteboard'] },
+  { id: 'corridor-center', position: { x: 500, y: 360 }, connections: ['corridor-top', 'corridor-left', 'corridor-right', 'corridor-bottom-left', 'corridor-bottom-center', 'corridor-bottom-right'] },
+
+  // Bottom corridors
+  { id: 'corridor-bottom-left', position: { x: 180, y: 450 }, connections: ['corridor-left', 'corridor-center', 'coffee', 'water_cooler'] },
+  { id: 'corridor-bottom-center', position: { x: 500, y: 450 }, connections: ['corridor-center', 'corridor-bottom-left', 'corridor-bottom-right', 'meeting', 'door'] },
+  { id: 'corridor-bottom-right', position: { x: 880, y: 450 }, connections: ['corridor-right', 'corridor-center', 'corridor-bottom-center', 'washroom'] },
+
+  // Desk waypoints
+  { id: 'desk-1', position: { x: 80, y: 170 }, connections: ['corridor-left'] },
+  { id: 'desk-2', position: { x: 220, y: 170 }, connections: ['corridor-left'] },
+  { id: 'desk-3', position: { x: 360, y: 170 }, connections: ['corridor-top'] },
+  { id: 'desk-4', position: { x: 540, y: 170 }, connections: ['corridor-top'] },
+  { id: 'desk-5', position: { x: 680, y: 170 }, connections: ['corridor-right'] },
+  { id: 'desk-6', position: { x: 820, y: 170 }, connections: ['corridor-right'] },
+
+  // Location waypoints
+  { id: 'terminal', position: { x: 100, y: 310 }, connections: ['corridor-left'] },
+  { id: 'search', position: { x: 260, y: 310 }, connections: ['corridor-left'] },
+  { id: 'files', position: { x: 780, y: 300 }, connections: ['corridor-right'] },
+  { id: 'whiteboard', position: { x: 900, y: 290 }, connections: ['corridor-right'] },
+  { id: 'coffee', position: { x: 80, y: 470 }, connections: ['corridor-bottom-left'] },
+  { id: 'water_cooler', position: { x: 200, y: 470 }, connections: ['corridor-bottom-left'] },
+  { id: 'meeting', position: { x: 500, y: 490 }, connections: ['corridor-bottom-center'] },
+  { id: 'washroom', position: { x: 880, y: 490 }, connections: ['corridor-bottom-right'] },
+  { id: 'door', position: { x: 500, y: 565 }, connections: ['corridor-bottom-center'] },
 ];
 
 // BFS pathfinding between waypoints
@@ -118,6 +149,10 @@ export function locationToWaypoint(location: OfficeLocation, index: number = 0):
       return 'whiteboard';
     case 'coffee_machine':
       return 'coffee';
+    case 'water_cooler':
+      return 'water_cooler';
+    case 'washroom':
+      return 'washroom';
     case 'door':
       return 'door';
   }

@@ -333,18 +333,36 @@ var FileWatcher = class extends import_events.EventEmitter {
     }
     try {
       const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
-      for (const entry of entries) {
-        const fullPath = path.join(dirPath, entry.name);
-        if (entry.isDirectory() && source === "cli") {
+      if (source === "cli") {
+        const sessionDirs = entries.filter((e) => e.isDirectory());
+        const dirStats = await Promise.all(
+          sessionDirs.map(async (entry) => {
+            const fullPath = path.join(dirPath, entry.name);
+            try {
+              const stat = await fs.promises.stat(fullPath);
+              return { entry, fullPath, mtime: stat.mtimeMs };
+            } catch {
+              return { entry, fullPath, mtime: 0 };
+            }
+          })
+        );
+        dirStats.sort((a, b) => b.mtime - a.mtime);
+        const recentDirs = dirStats.slice(0, 3);
+        for (const { entry, fullPath } of recentDirs) {
           const eventsFile = path.join(fullPath, "events.jsonl");
           if (this.fileExists(eventsFile)) {
             this.watchFile(eventsFile, source, entry.name);
           }
           this.watchSubdirectoryForFiles(fullPath, source, entry.name);
-        } else if (entry.isFile() && entry.name.endsWith(".jsonl")) {
-          this.watchFile(fullPath, source, path.basename(entry.name, ".jsonl"));
-        } else if (entry.isFile() && entry.name.endsWith(".json") && source === "chat") {
-          this.watchFile(fullPath, source, path.basename(entry.name, ".json"));
+        }
+      } else {
+        for (const entry of entries) {
+          const fullPath = path.join(dirPath, entry.name);
+          if (entry.isFile() && entry.name.endsWith(".jsonl")) {
+            this.watchFile(fullPath, source, path.basename(entry.name, ".jsonl"));
+          } else if (entry.isFile() && entry.name.endsWith(".json") && source === "chat") {
+            this.watchFile(fullPath, source, path.basename(entry.name, ".json"));
+          }
         }
       }
     } catch (err) {
@@ -378,14 +396,19 @@ var FileWatcher = class extends import_events.EventEmitter {
     if (this.watchedFiles.has(filePath)) {
       return;
     }
+    let initialOffset = 0;
+    try {
+      const stat = fs.statSync(filePath);
+      initialOffset = stat.size;
+    } catch {
+    }
     const watched = {
       filePath,
       source,
       sessionId,
-      byteOffset: 0,
+      byteOffset: initialOffset,
       watcher: null
     };
-    this.readNewContent(watched);
     try {
       const watcher = fs.watch(filePath, { persistent: false }, (eventType) => {
         if (!this.running) {

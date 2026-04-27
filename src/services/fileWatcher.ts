@@ -191,22 +191,41 @@ export class FileWatcher extends EventEmitter {
     try {
       const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
 
-      for (const entry of entries) {
-        const fullPath = path.join(dirPath, entry.name);
+      if (source === 'cli') {
+        // Only watch the most recently modified session directory (not all ~190 historical ones)
+        const sessionDirs = entries.filter(e => e.isDirectory());
+        const dirStats = await Promise.all(
+          sessionDirs.map(async (entry) => {
+            const fullPath = path.join(dirPath, entry.name);
+            try {
+              const stat = await fs.promises.stat(fullPath);
+              return { entry, fullPath, mtime: stat.mtimeMs };
+            } catch {
+              return { entry, fullPath, mtime: 0 };
+            }
+          })
+        );
 
-        if (entry.isDirectory() && source === 'cli') {
-          // CLI session directories — look for events.jsonl inside
+        // Sort by modification time descending, pick only the most recent session(s)
+        dirStats.sort((a, b) => b.mtime - a.mtime);
+        const recentDirs = dirStats.slice(0, 3); // Watch at most 3 most recent sessions
+
+        for (const { entry, fullPath } of recentDirs) {
           const eventsFile = path.join(fullPath, 'events.jsonl');
           if (this.fileExists(eventsFile)) {
             this.watchFile(eventsFile, source, entry.name);
           }
-
           // Also watch the subdirectory for new events.jsonl creation
           this.watchSubdirectoryForFiles(fullPath, source, entry.name);
-        } else if (entry.isFile() && entry.name.endsWith('.jsonl')) {
-          this.watchFile(fullPath, source, path.basename(entry.name, '.jsonl'));
-        } else if (entry.isFile() && entry.name.endsWith('.json') && source === 'chat') {
-          this.watchFile(fullPath, source, path.basename(entry.name, '.json'));
+        }
+      } else {
+        for (const entry of entries) {
+          const fullPath = path.join(dirPath, entry.name);
+          if (entry.isFile() && entry.name.endsWith('.jsonl')) {
+            this.watchFile(fullPath, source, path.basename(entry.name, '.jsonl'));
+          } else if (entry.isFile() && entry.name.endsWith('.json') && source === 'chat') {
+            this.watchFile(fullPath, source, path.basename(entry.name, '.json'));
+          }
         }
       }
     } catch (err) {
@@ -241,16 +260,22 @@ export class FileWatcher extends EventEmitter {
   private watchFile(filePath: string, source: LogSource, sessionId: string): void {
     if (this.watchedFiles.has(filePath)) { return; }
 
+    // Seek to end of file on startup — only process NEW events, not history
+    let initialOffset = 0;
+    try {
+      const stat = fs.statSync(filePath);
+      initialOffset = stat.size;
+    } catch { /* file may not exist yet */ }
+
     const watched: WatchedFile = {
       filePath,
       source,
       sessionId,
-      byteOffset: 0,
+      byteOffset: initialOffset,
       watcher: null,
     };
 
-    // Read existing content from the start to catch up
-    this.readNewContent(watched);
+    // Do NOT read existing content — only watch for new appends
 
     try {
       const watcher = fs.watch(filePath, { persistent: false }, (eventType) => {

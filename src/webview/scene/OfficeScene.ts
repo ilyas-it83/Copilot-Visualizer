@@ -15,6 +15,8 @@ export class OfficeScene {
   private running = false;
   private lastTime = 0;
   private interactionLines: InteractionLine[] = [];
+  private lastEventTime = 0; // tracks when last real Copilot event arrived
+  private noWorkBannerPulse = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new Renderer(canvas);
@@ -53,18 +55,16 @@ export class OfficeScene {
 
   addAgent(id: string, source: LogSource, index: number, customName?: string): void {
     if (this.agents.has(id)) return;
+    // Hard cap: never allow more than 10 agents regardless of events
+    if (this.agents.size >= 10) return;
     const desks = getDeskLocations();
     const deskIndex = index % desks.length;
     const desk = desks[deskIndex];
     const agent = new Agent(id, source, desk.position, deskIndex, customName);
 
-    // Entrance animation: start at door, walk to desk
-    agent.position = { x: 400, y: 470 };
-    agent.currentLocation = 'door';
-    agent.showSpeechBubble('👋 Hello!', 'speech', 2000);
-    agent.moveTo('desk', deskIndex, () => {
-      agent.setStatus('idle');
-    });
+    // Place agent directly at desk — no entrance animation
+    agent.currentLocation = `desk-${deskIndex + 1}`;
+    agent.setStatus('idle');
 
     this.agents.set(id, agent);
     this.renderer.invalidateBackground();
@@ -72,6 +72,24 @@ export class OfficeScene {
 
   getAllAgents(): Agent[] {
     return Array.from(this.agents.values());
+  }
+
+  /** Called when a real Copilot event is processed */
+  notifyEventReceived(): void {
+    this.lastEventTime = performance.now();
+  }
+
+  /** Check if any agent is doing real work (not idle/roaming) */
+  private isAnyAgentWorking(): boolean {
+    const idleStatuses: Set<string> = new Set([
+      'idle', 'walking', 'drinking_coffee', 'drinking_water',
+      'in_washroom', 'in_meeting', 'at_whiteboard', 'browsing_files',
+      'watching_phone', 'sleeping'
+    ]);
+    for (const agent of this.agents.values()) {
+      if (!idleStatuses.has(agent.status)) return true;
+    }
+    return false;
   }
 
   /** Add an interaction line between two agents */
@@ -108,6 +126,9 @@ export class OfficeScene {
       line.progress = Math.min(line.elapsed / line.duration, 1);
       return line.progress < 1;
     });
+
+    // Pulse animation for no-work banner
+    this.noWorkBannerPulse += dt;
   }
 
   private render(): void {
@@ -123,6 +144,11 @@ export class OfficeScene {
       this.agentRenderer.draw(agent);
     }
     this.renderer.restoreCamera();
+
+    // Layer 3: "No Active Work" banner (drawn on top, in screen space)
+    if (this.agents.size > 0 && !this.isAnyAgentWorking()) {
+      this.drawNoWorkBanner();
+    }
   }
 
   private drawInteractionLines(): void {
@@ -170,6 +196,13 @@ export class OfficeScene {
     ctx.fillStyle = '#f0ebe3';
     ctx.fillRect(0, 0, OFFICE_WIDTH, OFFICE_HEIGHT);
 
+    // Title
+    ctx.font = 'bold 36px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#5a4e3e';
+    ctx.fillText('🏢 Copilot Office', OFFICE_WIDTH / 2, 38);
+    ctx.textAlign = 'left';
+
     // Grid lines (subtle)
     ctx.strokeStyle = '#e0dbd3';
     ctx.lineWidth = 0.5;
@@ -185,6 +218,9 @@ export class OfficeScene {
       ctx.lineTo(OFFICE_WIDTH, y);
       ctx.stroke();
     }
+
+    // ========== PARTITION WALLS ==========
+    this.drawPartitionWalls(ctx);
 
     // Draw office furniture
     for (const loc of LOCATIONS) {
@@ -203,6 +239,107 @@ export class OfficeScene {
         );
       }
     }
+  }
+
+  private drawPartitionWalls(ctx: CanvasRenderingContext2D): void {
+    const wallColor = '#8d7b68';
+    const wallDark = '#6b5d4f';
+    const wallWidth = 6;
+    const doorGap = 40;
+
+    // Helper: draw a wall segment with 3D effect
+    const drawWall = (x1: number, y1: number, x2: number, y2: number) => {
+      ctx.save();
+      // Shadow
+      ctx.shadowColor = 'rgba(0,0,0,0.3)';
+      ctx.shadowBlur = 4;
+      ctx.shadowOffsetX = 2;
+      ctx.shadowOffsetY = 2;
+      ctx.strokeStyle = wallColor;
+      ctx.lineWidth = wallWidth;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+      ctx.restore();
+      // Top edge highlight
+      ctx.strokeStyle = '#a89580';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1 - wallWidth / 2 + 1);
+      ctx.lineTo(x2, y2 - wallWidth / 2 + 1);
+      ctx.stroke();
+    };
+
+    // Helper: draw a doorway with frame
+    const drawDoorway = (x: number, y: number, isVertical: boolean) => {
+      ctx.fillStyle = '#d4c5a9';
+      if (isVertical) {
+        ctx.fillRect(x - wallWidth / 2 - 1, y - doorGap / 2, wallWidth + 2, doorGap);
+      } else {
+        ctx.fillRect(x - doorGap / 2, y - wallWidth / 2 - 1, doorGap, wallWidth + 2);
+      }
+      // Door frame posts
+      ctx.fillStyle = wallDark;
+      if (isVertical) {
+        ctx.fillRect(x - wallWidth / 2, y - doorGap / 2 - 2, wallWidth, 4);
+        ctx.fillRect(x - wallWidth / 2, y + doorGap / 2 - 2, wallWidth, 4);
+      } else {
+        ctx.fillRect(x - doorGap / 2 - 2, y - wallWidth / 2, 4, wallWidth);
+        ctx.fillRect(x + doorGap / 2 - 2, y - wallWidth / 2, 4, wallWidth);
+      }
+    };
+
+    // Helper: draw room label
+    const drawRoomLabel = (text: string, x: number, y: number) => {
+      ctx.save();
+      ctx.font = 'bold 20px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = 'rgba(90, 78, 62, 0.6)';
+      ctx.fillText(text, x, y);
+      ctx.restore();
+    };
+
+    // ── Room floor tints (draw before walls) ──
+
+    // Pantry floor (bottom-left: x 0-270, y 390-600)
+    ctx.fillStyle = 'rgba(255, 243, 224, 0.5)';
+    ctx.fillRect(0, 390, 270, 210);
+
+    // Meeting Room floor (bottom-center: x 270-760, y 390-600)
+    ctx.fillStyle = 'rgba(232, 245, 233, 0.4)';
+    ctx.fillRect(270, 390, 490, 210);
+
+    // WC floor (bottom-right: x 760-1000, y 390-600)
+    ctx.fillStyle = 'rgba(224, 247, 250, 0.5)';
+    ctx.fillRect(760, 390, 240, 210);
+
+    // ── PANTRY WALLS ── (encloses coffee + water cooler, bottom-left)
+    // Top wall with doorway
+    drawWall(0, 390, 100, 390);
+    drawWall(100 + doorGap, 390, 270, 390);
+    drawDoorway(100 + doorGap / 2, 390, false);
+    // Right wall
+    drawWall(270, 390, 270, OFFICE_HEIGHT);
+    drawRoomLabel('☕ Pantry', 135, 408);
+
+    // ── MEETING ROOM WALLS ── (encloses meeting table, bottom-center)
+    // Top wall with doorway (centered)
+    drawWall(270, 390, 480, 390);
+    drawWall(480 + doorGap, 390, 760, 390);
+    drawDoorway(480 + doorGap / 2, 390, false);
+    // Right wall
+    drawWall(760, 390, 760, OFFICE_HEIGHT);
+    drawRoomLabel('🗣️ Meeting Room', 515, 408);
+
+    // ── WC WALLS ── (encloses washroom, bottom-right)
+    // Top wall with doorway
+    drawWall(760, 390, 850, 390);
+    drawWall(850 + doorGap, 390, OFFICE_WIDTH, 390);
+    drawDoorway(850 + doorGap / 2, 390, false);
+    drawRoomLabel('🚻 WC', 880, 408);
+
   }
 
   private drawFurniture(ctx: CanvasRenderingContext2D, loc: typeof LOCATIONS[0]): void {
@@ -293,16 +430,68 @@ export class OfficeScene {
         break;
 
       case 'coffee_machine':
+        // Coffee booth with counter feel
         ctx.fillStyle = '#4a3520';
         ctx.fillRect(size.x, size.y, size.width, size.height);
+        ctx.fillStyle = '#6b4c30';
+        ctx.fillRect(size.x + 2, size.y + 2, size.width - 4, 12);
         ctx.fillStyle = '#fff';
-        ctx.fillRect(size.x + size.width / 2 - 8, size.y + size.height - 20, 16, 14);
+        ctx.fillRect(size.x + size.width / 2 - 8, size.y + size.height - 22, 16, 14);
+        // Steam
         ctx.strokeStyle = '#ccc';
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(size.x + size.width / 2 - 3, size.y + size.height - 22);
-        ctx.quadraticCurveTo(size.x + size.width / 2, size.y + size.height - 30, size.x + size.width / 2 + 3, size.y + size.height - 35);
+        ctx.moveTo(size.x + size.width / 2 - 3, size.y + size.height - 24);
+        ctx.quadraticCurveTo(size.x + size.width / 2, size.y + size.height - 32, size.x + size.width / 2 + 3, size.y + size.height - 37);
         ctx.stroke();
+        // Stool
+        ctx.fillStyle = '#333';
+        ctx.beginPath();
+        ctx.arc(size.x + size.width / 2, size.y + size.height + 12, 7, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+
+      case 'water_cooler':
+        // Blue water jug on a stand
+        ctx.fillStyle = '#e0e0e0';
+        ctx.fillRect(size.x + 10, size.y + 25, size.width - 20, size.height - 25);
+        // Jug (inverted bottle)
+        ctx.fillStyle = '#4fc3f7';
+        ctx.beginPath();
+        ctx.moveTo(size.x + 15, size.y + 5);
+        ctx.lineTo(size.x + size.width - 15, size.y + 5);
+        ctx.lineTo(size.x + size.width - 12, size.y + 28);
+        ctx.lineTo(size.x + 12, size.y + 28);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = '#0288d1';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        // Neck
+        ctx.fillStyle = '#4fc3f7';
+        ctx.fillRect(size.x + size.width / 2 - 5, size.y + 28, 10, 6);
+        // Tap
+        ctx.fillStyle = '#999';
+        ctx.fillRect(size.x + size.width / 2 - 2, size.y + 36, 4, 8);
+        break;
+
+      case 'washroom':
+        // Door with WC icon
+        ctx.fillStyle = '#8d6e63';
+        ctx.fillRect(size.x, size.y, size.width, size.height);
+        ctx.strokeStyle = '#5d4037';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(size.x, size.y, size.width, size.height);
+        // Door handle
+        ctx.fillStyle = '#daa520';
+        ctx.beginPath();
+        ctx.arc(size.x + size.width - 12, size.y + size.height / 2, 3, 0, Math.PI * 2);
+        ctx.fill();
+        // WC text
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('🚻', size.x + size.width / 2, size.y + size.height / 2 + 4);
         break;
 
       case 'door':
@@ -315,10 +504,59 @@ export class OfficeScene {
         break;
     }
 
-    // Label
-    ctx.fillStyle = '#666';
-    ctx.font = '10px sans-serif';
+    // Label — skip for items inside walled rooms (they have room labels already)
+    const roomItems = ['washroom', 'coffee_machine', 'water_cooler', 'meeting_table'];
+    if (!roomItems.includes(id)) {
+      ctx.fillStyle = '#555';
+      ctx.font = 'bold 20px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(label, size.x + size.width / 2, size.y + size.height + 20);
+    }
+  }
+
+  private drawNoWorkBanner(): void {
+    const ctx = this.renderer.context;
+    const w = this.renderer.width;
+
+    ctx.save();
+
+    // Semi-transparent banner at bottom
+    const bannerH = 36;
+    const bannerY = this.renderer.height - bannerH - 8;
+    const pulse = 0.7 + Math.sin(this.noWorkBannerPulse * 2) * 0.15;
+
+    // Banner background
+    ctx.fillStyle = `rgba(45, 45, 55, ${pulse * 0.85})`;
+    const bannerW = 320;
+    const bannerX = (w - bannerW) / 2;
+    const radius = 18;
+    ctx.beginPath();
+    ctx.moveTo(bannerX + radius, bannerY);
+    ctx.lineTo(bannerX + bannerW - radius, bannerY);
+    ctx.quadraticCurveTo(bannerX + bannerW, bannerY, bannerX + bannerW, bannerY + radius);
+    ctx.lineTo(bannerX + bannerW, bannerY + bannerH - radius);
+    ctx.quadraticCurveTo(bannerX + bannerW, bannerY + bannerH, bannerX + bannerW - radius, bannerY + bannerH);
+    ctx.lineTo(bannerX + radius, bannerY + bannerH);
+    ctx.quadraticCurveTo(bannerX, bannerY + bannerH, bannerX, bannerY + bannerH - radius);
+    ctx.lineTo(bannerX, bannerY + radius);
+    ctx.quadraticCurveTo(bannerX, bannerY, bannerX + radius, bannerY);
+    ctx.fill();
+
+    // Border glow
+    ctx.strokeStyle = `rgba(100, 180, 255, ${pulse * 0.5})`;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Moon/sleep icon
+    ctx.font = '16px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(label, size.x + size.width / 2, size.y + size.height + 14);
+    ctx.fillText('🌙', bannerX + 28, bannerY + 24);
+
+    // Text
+    ctx.font = 'bold 13px sans-serif';
+    ctx.fillStyle = `rgba(200, 210, 230, ${pulse})`;
+    ctx.fillText('No Active Work — Agents on Break', w / 2 + 8, bannerY + 23);
+
+    ctx.restore();
   }
 }

@@ -1,6 +1,7 @@
 .vscode/**
 .vscode-test/**
 src/**
+!src/img/**
 node_modules/**
 .gitignore
 tsconfig.json

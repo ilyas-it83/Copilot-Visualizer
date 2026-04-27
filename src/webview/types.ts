@@ -20,7 +20,15 @@ export type AgentStatus =
   | 'reading'
   | 'talking'
   | 'thinking'
-  | 'searching';
+  | 'searching'
+  | 'drinking_coffee'
+  | 'drinking_water'
+  | 'in_washroom'
+  | 'in_meeting'
+  | 'at_whiteboard'
+  | 'browsing_files'
+  | 'watching_phone'
+  | 'sleeping';
 
 export type OfficeLocation =
   | 'desk'
@@ -30,6 +38,8 @@ export type OfficeLocation =
   | 'search_station'
   | 'whiteboard'
   | 'coffee_machine'
+  | 'water_cooler'
+  | 'washroom'
   | 'door';
 
 export interface InteractionLine {

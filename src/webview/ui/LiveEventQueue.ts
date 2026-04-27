@@ -35,6 +35,7 @@ export class LiveEventQueue {
 
     // Animate and get estimated duration
     const duration = this.eventAnimator.animateEvent(event);
+    this.scene.notifyEventReceived();
 
     // Wait a fraction of the animation duration before processing next
     // This prevents pile-up while keeping things flowing

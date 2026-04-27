@@ -127,36 +127,99 @@ export class Renderer {
     }
   }
 
-  // Speech bubble with pointer
+  // Speech bubble with pointer — large and readable, clamped to canvas
   drawSpeechBubble(x: number, y: number, text: string, bgColor: string, textColor: string): void {
-    const padding = 8;
-    this.ctx.font = '11px monospace';
-    const lines = this.wrapText(text, 150);
-    const lineHeight = 14;
-    const w = Math.min(170, Math.max(...lines.map((l) => this.ctx.measureText(l).width)) + padding * 2);
+    const padding = 16;
+    this.ctx.font = 'bold 18px monospace';
+    const lines = this.wrapText(text, 300);
+    const lineHeight = 24;
+    const w = Math.min(340, Math.max(...lines.map((l) => this.ctx.measureText(l).width)) + padding * 2);
     const h = lines.length * lineHeight + padding * 2;
 
-    const bx = x - w / 2;
-    const by = y - h - 10;
+    // Try placing above the agent
+    let bx = x - w / 2;
+    let by = y - h - 20;
+    let pointerAbove = false; // pointer on bottom (bubble above agent)
+
+    // Clamp horizontal so bubble stays on canvas
+    if (bx < 4) bx = 4;
+    if (bx + w > this.width - 4) bx = this.width - w - 4;
+
+    // If bubble would go off the top, flip it BELOW the agent
+    if (by < 4) {
+      by = y + 30; // place below the agent sprite
+      pointerAbove = true; // pointer on top (bubble below agent)
+    }
+
+    // Shadow for depth
+    this.ctx.save();
+    this.ctx.shadowColor = 'rgba(0,0,0,0.25)';
+    this.ctx.shadowBlur = 8;
+    this.ctx.shadowOffsetX = 2;
+    this.ctx.shadowOffsetY = 2;
 
     // Bubble body
-    this.drawRoundedRect(bx, by, w, h, 6, bgColor, '#555');
+    this.drawRoundedRect(bx, by, w, h, 10, bgColor, '#444');
+    this.ctx.restore();
 
-    // Pointer triangle
+    // Thick border for visibility
+    this.ctx.strokeStyle = '#444';
+    this.ctx.lineWidth = 2;
+    this.ctx.beginPath();
+    this.roundRectPath(bx, by, w, h, 10);
+    this.ctx.stroke();
+
+    // Pointer triangle — clamp pointer x inside bubble bounds
+    const px = Math.max(bx + 14, Math.min(x, bx + w - 14));
     this.ctx.fillStyle = bgColor;
     this.ctx.beginPath();
-    this.ctx.moveTo(x - 5, by + h);
-    this.ctx.lineTo(x + 5, by + h);
-    this.ctx.lineTo(x, by + h + 8);
+    if (pointerAbove) {
+      // Pointer on TOP of bubble (bubble is below agent)
+      this.ctx.moveTo(px - 10, by);
+      this.ctx.lineTo(px + 10, by);
+      this.ctx.lineTo(px, by - 14);
+    } else {
+      // Pointer on BOTTOM of bubble (bubble is above agent)
+      this.ctx.moveTo(px - 10, by + h);
+      this.ctx.lineTo(px + 10, by + h);
+      this.ctx.lineTo(px, by + h + 14);
+    }
     this.ctx.closePath();
     this.ctx.fill();
+    this.ctx.strokeStyle = '#444';
+    this.ctx.lineWidth = 2;
+    this.ctx.beginPath();
+    if (pointerAbove) {
+      this.ctx.moveTo(px - 10, by);
+      this.ctx.lineTo(px, by - 14);
+      this.ctx.lineTo(px + 10, by);
+    } else {
+      this.ctx.moveTo(px - 10, by + h);
+      this.ctx.lineTo(px, by + h + 14);
+      this.ctx.lineTo(px + 10, by + h);
+    }
+    this.ctx.stroke();
 
     // Text
     this.ctx.fillStyle = textColor;
+    this.ctx.font = 'bold 18px monospace';
     this.ctx.textAlign = 'left';
     lines.forEach((line, i) => {
-      this.ctx.fillText(line, bx + padding, by + padding + (i + 1) * lineHeight - 2);
+      this.ctx.fillText(line, bx + padding, by + padding + (i + 1) * lineHeight - 4);
     });
+  }
+
+  private roundRectPath(x: number, y: number, w: number, h: number, r: number): void {
+    this.ctx.moveTo(x + r, y);
+    this.ctx.lineTo(x + w - r, y);
+    this.ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    this.ctx.lineTo(x + w, y + h - r);
+    this.ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    this.ctx.lineTo(x + r, y + h);
+    this.ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    this.ctx.lineTo(x, y + r);
+    this.ctx.quadraticCurveTo(x, y, x + r, y);
+    this.ctx.closePath();
   }
 
   private wrapText(text: string, maxWidth: number): string[] {
@@ -174,6 +237,6 @@ export class Renderer {
       }
     }
     if (currentLine) lines.push(currentLine);
-    return lines.length > 3 ? [...lines.slice(0, 3), '...'] : lines;
+    return lines.length > 5 ? [...lines.slice(0, 5), '...'] : lines;
   }
 }
