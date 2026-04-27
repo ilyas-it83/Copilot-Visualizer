@@ -66,9 +66,9 @@
     }
   },
   "scripts": {
-    "compile": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
-    "watch": "npm run compile -- --watch",
-    "build": "npm run compile -- --minify",
+    "compile": "node esbuild.config.js",
+    "watch": "node esbuild.config.js --watch",
+    "build": "node esbuild.config.js --production",
     "lint": "eslint src/ --ext .ts",
     "pretest": "npm run compile",
     "test": "vitest run",

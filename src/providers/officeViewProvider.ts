@@ -127,7 +127,10 @@ export class OfficeViewProvider {
   private getWebviewContent(webview: vscode.Webview): string {
     const nonce = getNonce();
 
-    // Jim will provide the actual webview JS/CSS — this is the shell
+    const scriptUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview.js')
+    );
+
     const csp = [
       `default-src 'none'`,
       `style-src ${webview.cspSource} 'unsafe-inline'`,
@@ -144,49 +147,63 @@ export class OfficeViewProvider {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Copilot Office</title>
   <style>
+    :root {
+      --bg-primary: #1e1e1e;
+      --bg-secondary: #252526;
+      --bg-tertiary: #2d2d30;
+      --text-primary: #cccccc;
+      --text-secondary: #999999;
+      --accent-blue: #4285f4;
+      --border: #3e3e42;
+      --timeline-height: 52px;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      margin: 0;
-      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
       overflow: hidden;
-      background: #1e1e2e;
-      color: #cdd6f4;
-      font-family: var(--vscode-font-family);
-      display: flex;
-      align-items: center;
-      justify-content: center;
       height: 100vh;
     }
-    .loading {
-      text-align: center;
-    }
-    .loading h2 {
-      font-weight: 300;
-      margin-bottom: 8px;
-    }
-    .loading p {
-      opacity: 0.7;
-      font-size: 13px;
-    }
+    #app { display: flex; flex-direction: column; height: 100vh; }
+    #canvas-container { flex: 1; position: relative; overflow: hidden; }
+    #office-canvas { display: block; width: 100%; height: 100%; }
+    #session-picker { position: absolute; top: 8px; left: 8px; z-index: 10; }
+    #event-inspector { position: absolute; top: 8px; right: 8px; width: 280px; max-height: calc(100vh - 80px); z-index: 20; overflow-y: auto; }
+    #event-inspector.hidden { display: none; }
+    #timeline-bar { height: var(--timeline-height); border-top: 1px solid var(--border); background: var(--bg-secondary); }
+    .session-picker { display: flex; align-items: center; gap: 8px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; }
+    .picker-label { font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
+    .picker-select { background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; font-size: 12px; max-width: 300px; cursor: pointer; }
+    .timeline { display: flex; align-items: center; height: 100%; padding: 0 12px; gap: 8px; }
+    .timeline-btn { background: var(--bg-tertiary); border: 1px solid var(--border); color: var(--text-primary); border-radius: 4px; width: 30px; height: 30px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; }
+    .timeline-btn:hover { background: var(--accent-blue); border-color: var(--accent-blue); }
+    .speed-btn { width: auto; padding: 0 8px; font-size: 11px; font-weight: 600; }
+    .timeline-scrubber-container { flex: 1; position: relative; height: 20px; display: flex; align-items: center; }
+    .event-markers { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; }
+    .event-marker { position: absolute; width: 4px; height: 4px; border-radius: 50%; top: 50%; transform: translate(-50%, -50%); opacity: 0.7; }
+    .timeline-scrubber { width: 100%; height: 4px; -webkit-appearance: none; appearance: none; background: var(--bg-tertiary); border-radius: 2px; outline: none; cursor: pointer; }
+    .timeline-scrubber::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%; background: var(--accent-blue); cursor: pointer; }
+    .timeline-time { font-size: 11px; color: var(--text-secondary); font-family: monospace; white-space: nowrap; min-width: 90px; text-align: right; }
+    .inspector { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    .inspector-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+    .inspector-header h3 { font-size: 13px; font-weight: 600; }
+    .inspector-close { background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 16px; padding: 2px 6px; border-radius: 3px; }
+    .inspector-body { padding: 12px 14px; }
+    .inspector-field { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+    .inspector-field label { color: var(--text-secondary); font-weight: 500; }
   </style>
 </head>
 <body>
-  <div class="loading">
-    <h2>🏢 Copilot Office</h2>
-    <p>Waiting for webview bundle...</p>
-    <p style="font-size: 11px; margin-top: 16px; opacity: 0.5;">
-      The visualization canvas will load here once the webview is built.
-    </p>
+  <div id="app">
+    <div id="canvas-container">
+      <canvas id="office-canvas"></canvas>
+      <div id="session-picker"></div>
+      <div id="event-inspector" class="hidden"></div>
+    </div>
+    <div id="timeline-bar"></div>
   </div>
-  <script nonce="${nonce}">
-    const vscode = acquireVsCodeApi();
-    // Message listener — Jim's webview code will replace this
-    window.addEventListener('message', event => {
-      const message = event.data;
-      console.log('[Webview] Received:', message.type);
-    });
-    // Request session list on load
-    vscode.postMessage({ type: 'request-session-list' });
-  </script>
+  <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;
   }
