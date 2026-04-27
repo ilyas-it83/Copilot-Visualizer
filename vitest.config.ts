@@ -1,0 +1,18 @@
+import { defineConfig } from 'vitest/config';
+
+export default defineConfig({
+  test: {
+    root: '.',
+    include: ['src/test/**/*.test.ts'],
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.ts'],
+      exclude: ['src/test/**'],
+    },
+  },
+  resolve: {
+    alias: {
+      vscode: './src/test/__mocks__/vscode.ts',
+    },
+  },
+});

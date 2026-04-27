@@ -1,0 +1,10 @@
+{
+  "sessionId": "test-session-001",
+  "startTime": "2026-04-27T10:00:00Z",
+  "source": "cli",
+  "agentCount": 2,
+  "model": "claude-sonnet-4",
+  "cwd": "/Users/test/project",
+  "os": "darwin",
+  "arch": "arm64"
+}

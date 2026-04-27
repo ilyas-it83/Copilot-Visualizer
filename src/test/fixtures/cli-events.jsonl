@@ -1,0 +1,11 @@
+{"type":"session.start","timestamp":"2026-04-27T10:00:00Z","sessionId":"test-session-001","data":{"model":"claude-sonnet-4","cwd":"/Users/test/project"}}
+{"type":"session.info","timestamp":"2026-04-27T10:00:01Z","sessionId":"test-session-001","data":{"os":"darwin","arch":"arm64"}}
+{"type":"hook.start","timestamp":"2026-04-27T10:00:02Z","sessionId":"test-session-001","data":{"hookName":"user-message","content":"Fix the login bug"}}
+{"type":"tool.call","timestamp":"2026-04-27T10:00:05Z","sessionId":"test-session-001","data":{"toolName":"bash","arguments":{"command":"grep -r 'login' src/"},"agentId":"agent-1"}}
+{"type":"tool.result","timestamp":"2026-04-27T10:00:06Z","sessionId":"test-session-001","data":{"toolName":"bash","success":true,"output":"src/auth.ts:15: function login()","agentId":"agent-1"}}
+{"type":"tool.call","timestamp":"2026-04-27T10:00:08Z","sessionId":"test-session-001","data":{"toolName":"view","arguments":{"path":"src/auth.ts"},"agentId":"agent-1"}}
+{"type":"tool.result","timestamp":"2026-04-27T10:00:09Z","sessionId":"test-session-001","data":{"toolName":"view","success":true,"agentId":"agent-1"}}
+{"type":"tool.call","timestamp":"2026-04-27T10:00:12Z","sessionId":"test-session-001","data":{"toolName":"edit","arguments":{"path":"src/auth.ts","old_str":"if (user)","new_str":"if (user && user.isActive)"},"agentId":"agent-1"}}
+{"type":"tool.result","timestamp":"2026-04-27T10:00:13Z","sessionId":"test-session-001","data":{"toolName":"edit","success":true,"agentId":"agent-1"}}
+{"type":"hook.end","timestamp":"2026-04-27T10:00:15Z","sessionId":"test-session-001","data":{"hookName":"user-message","response":"Fixed the login bug by adding an isActive check"}}
+{"type":"session.end","timestamp":"2026-04-27T10:00:20Z","sessionId":"test-session-001"}

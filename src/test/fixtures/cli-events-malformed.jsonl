@@ -1,0 +1,6 @@
+{"type":"session.start","timestamp":"2026-04-27T10:00:00Z"}
+not valid json at all
+{"type":"unknown_type","timestamp":"2026-04-27T10:00:01Z","data":{}}
+{"type":"tool.call","data":{"toolName":"bash"}}
+{"type":"tool.call","timestamp":"2026-04-27T10:00:05Z","sessionId":"test-session-001","data":{"toolName":"bash","arguments":{"command":"echo hello"},"agentId":"agent-1","extraField":"should be ignored"}}
+

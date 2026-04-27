@@ -1,0 +1,47 @@
+{
+  "conversations": [
+    {
+      "id": "conv-001",
+      "turns": [
+        {
+          "role": "user",
+          "content": "How do I fix this error?",
+          "timestamp": "2026-04-27T10:00:00Z"
+        },
+        {
+          "role": "assistant",
+          "content": "The error is caused by a missing null check in the authentication middleware. You need to verify that the user object exists before accessing its properties.",
+          "timestamp": "2026-04-27T10:00:02Z",
+          "model": "claude-sonnet-4"
+        },
+        {
+          "role": "user",
+          "content": "Can you show me the code?",
+          "timestamp": "2026-04-27T10:00:05Z"
+        },
+        {
+          "role": "assistant",
+          "content": "Here's the fix:\n```typescript\nif (user && user.isAuthenticated) {\n  next();\n}\n```",
+          "timestamp": "2026-04-27T10:00:07Z",
+          "model": "claude-sonnet-4"
+        }
+      ]
+    },
+    {
+      "id": "conv-002",
+      "turns": [
+        {
+          "role": "user",
+          "content": "What does this function do?",
+          "timestamp": "2026-04-27T11:00:00Z"
+        },
+        {
+          "role": "assistant",
+          "content": "This function calculates the Levenshtein distance between two strings.",
+          "timestamp": "2026-04-27T11:00:03Z",
+          "model": "gpt-4o"
+        }
+      ]
+    }
+  ]
+}

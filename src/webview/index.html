@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'none'; style-src {{cspSource}} 'unsafe-inline'; script-src 'nonce-{{nonce}}';" />
+  <title>Copilot Visualizer</title>
+  <link rel="stylesheet" href="{{stylesUri}}" />
+</head>
+<body>
+  <div id="app">
+    <div id="canvas-container">
+      <canvas id="office-canvas"></canvas>
+    </div>
+    <div id="timeline-bar"></div>
+    <div id="session-picker"></div>
+    <div id="event-inspector" class="hidden"></div>
+  </div>
+  <script nonce="{{nonce}}" src="{{scriptUri}}"></script>
+</body>
+</html>

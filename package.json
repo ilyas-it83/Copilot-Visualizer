@@ -1,0 +1,89 @@
+{
+  "name": "copilot-visualizer",
+  "displayName": "Copilot Visualizer",
+  "description": "Visualize GitHub Copilot agent actions as an animated office scene",
+  "version": "0.1.0",
+  "publisher": "copilot-visualizer",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Visualization",
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:copilot-visualizer.openOffice"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "copilot-visualizer.openOffice",
+        "title": "Copilot Visualizer: Open Office"
+      },
+      {
+        "command": "copilot-visualizer.selectSession",
+        "title": "Copilot Visualizer: Select Session"
+      },
+      {
+        "command": "copilot-visualizer.refreshLogs",
+        "title": "Copilot Visualizer: Refresh Logs"
+      }
+    ],
+    "configuration": {
+      "title": "Copilot Visualizer",
+      "properties": {
+        "copilotVisualizer.logPaths.cli": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Custom CLI log paths (auto-detected if empty)"
+        },
+        "copilotVisualizer.logPaths.chat": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Custom Chat log paths (auto-detected if empty)"
+        },
+        "copilotVisualizer.animation.speed": {
+          "type": "number",
+          "default": 1.0,
+          "description": "Default playback speed"
+        },
+        "copilotVisualizer.animation.quality": {
+          "type": "string",
+          "enum": ["low", "medium", "high"],
+          "default": "high",
+          "description": "Animation quality level"
+        },
+        "copilotVisualizer.maxEvents": {
+          "type": "number",
+          "default": 5000,
+          "description": "Maximum events to load per session"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
+    "watch": "npm run compile -- --watch",
+    "build": "npm run compile -- --minify",
+    "lint": "eslint src/ --ext .ts",
+    "pretest": "npm run compile",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.20.0",
+    "eslint": "^8.56.0",
+    "@typescript-eslint/eslint-plugin": "^6.19.0",
+    "@typescript-eslint/parser": "^6.19.0",
+    "typescript": "^5.3.3",
+    "vitest": "^3.1.0",
+    "@vitest/coverage-v8": "^3.1.0"
+  }
+}
